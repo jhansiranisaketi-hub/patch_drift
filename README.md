@@ -271,34 +271,129 @@ Response:
 
 ---
 
-## Running Locally
+## Quick Start
+
+### 1. Install Dependencies
 
 ```bash
-# Install dependencies
+# Create virtual environment (recommended)
+uv venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# Install packages
+uv pip install --python .venv/bin/python -r requirements.txt
+
+# OR if you have pip
 pip install -r requirements.txt
-
-# Start the server
-uvicorn main:app --reload --port 8000
-
-# Open the dashboard
-open frontend/index.html
 ```
+
+### 2. Start Backend Servers
+
+**Terminal 1 — Mock Payment API (V1 + V2):**
+```bash
+uvicorn mock_api:app --port 8001 --reload
+```
+
+**Terminal 2 — PatchDrift Gateway:**
+```bash
+uvicorn main:app --port 8000 --reload
+```
+
+### 3. Open Frontend Dashboard
+
+```bash
+# Linux
+xdg-open frontend/index.html
+
+# macOS
+open frontend/index.html
+
+# Windows
+start frontend/index.html
+```
+
+Or just double-click `frontend/index.html` in your file manager.
 
 ---
 
 ## Demo Scenario
 
-| Step | What Happens |
-|---|---|
-| 1 | App sends old-format request → V1 API → 200 OK |
-| 2 | API switches to V2 — same request → 400 |
-| 3 | PatchDrift detects drift signal in error |
-| 4 | Schema diff identifies: `billing_address → customer.address.billing` |
-| 5 | Adapter generated and tested in sandbox → PASS |
-| 6 | Request retried with adapter → 200 OK |
-| 7 | Migration stored in Hindsight |
-| 8 | Same request sent again → Hindsight recall → instant fix |
-| 9 | PR generated showing before/after code change |
+### The Setup
+- Payment API V2 is already running (on port 8001)
+- Your application still uses the old V1 format
+- PatchDrift sits in the middle as a gateway (on port 8000)
+
+### Step-by-Step Demo
+
+**1. Send Old Format Request (First Time)**
+- Open `frontend/index.html` in your browser
+- Keep format as **"V1 Format (Old)"**
+- Customer ID: `101`, Address: `Hyderabad`
+- Click **"Send Request"**
+
+**What you'll see:**
+- Drift Detection Log animates the full pipeline:
+  - 🚀 Forwarding to API V2
+  - ⚠️ 400 Error: "Unknown field: billing_address"
+  - 🔍 Drift detected
+  - 🔧 Adapter generated: `billing_address → customer.address.billing`
+  - 🧪 Sandbox verification: PASS
+  - 🔁 Retry with adapted payload
+  - ✅ Healed! 200 OK
+  - 💾 Stored in Hindsight
+- Status badge turns green: **"✓ Healed"**
+- API returns transaction ID successfully
+
+**2. Check Hindsight Memory**
+- Click **"↻ Refresh"** in the Hindsight Memory panel
+- See the stored migration:
+  - `billing_address → customer.address.billing`
+  - ✓ Verified
+  - Used: 1×
+
+**3. Send Old Format Again (Instant Recall)**
+- Change values: Customer ID: `202`, Address: `Mumbai`
+- Keep format as **"V1 Format (Old)"** (don't switch to V2!)
+- Click **"Send Request"**
+
+**What you'll see:**
+- 🧠 **Hindsight recall** — matching migration found!
+- ⚡ Instant fix (no re-investigation, no sandbox re-verification)
+- ✅ 200 OK immediately
+
+**4. Verify Memory Reuse**
+- Click **"↻ Refresh"** in Hindsight panel
+- See use count increased: **Used: 2×**
+
+**5. Generate Permanent Fix**
+- Click **"Generate PR"** in the PR Diff panel
+- See the before/after code change:
+  ```diff
+  - billing_address: address
+  + customer: {
+  +   address: {
+  +     billing: address
+  +   }
+  + }
+  ```
+- This is the permanent fix PatchDrift would commit to your codebase
+
+**6. (Optional) Test V2 Format Directly**
+- Switch format to **"V2 Format (New)"**
+- Click **"Send Request"**
+- See **"✓ Success"** badge — no healing needed, API accepts it directly
+
+### The Key Insight
+
+Your application code **never changed**. It still sends the old V1 format. But PatchDrift:
+1. Detected the breaking change
+2. Generated and verified a fix
+3. Kept your app running
+4. Remembered the solution
+5. Made future requests instant
+6. Generated a permanent code fix for later
+
+**Zero downtime. Zero manual intervention.**
 
 ---
 
@@ -349,3 +444,32 @@ PatchDrift does not automatically apply every AI-generated change.
 ## One-Line Pitch
 
 > PatchDrift is a memory-powered API reliability agent that detects breaking API changes, verifies compatibility fixes, self-heals requests at runtime, remembers successful migrations using Hindsight, and turns those learned fixes into permanent code changes through GitHub Pull Requests.
+
+---
+
+## Project Status
+
+✅ **MVP Complete** — Full end-to-end demo working  
+✅ Mock API V1 + V2  
+✅ PatchDrift Gateway with drift detection  
+✅ Hindsight memory (retain, recall, reflect)  
+✅ Sandbox verification  
+✅ PR generation  
+✅ Interactive dashboard UI  
+
+**Current Implementation:**
+- Person 1: Mock APIs + Gateway ✅
+- Person 2: Drift detector + Adapter + Sandbox (in progress)
+- Person 3: Hindsight + PR Generator ✅
+- Person 4: Frontend Dashboard ✅
+
+---
+
+## Contributing
+
+This is a hackathon MVP. Contributions welcome for:
+- Preventive monitoring (detect API changes before they break)
+- Support for GraphQL, gRPC APIs
+- Multi-API dependency tracking
+- Real GitHub PR automation
+- CI/CD integration
