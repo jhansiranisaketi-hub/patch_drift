@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PatchDrift Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* Custom scrollbar for log panels */
+    .log-scroll::-webkit-scrollbar { width: 4px; }
+    .log-scroll::-webkit-scrollbar-track { background: #1e293b; }
+    .log-scroll::-webkit-scrollbar-thumb { background: #475569; border-radius: 2px; }
+
+    /* Fade-in animation for log steps */
+    @keyframes fadeSlideIn {
+      from { opacity: 0; transform: translateX(-8px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+    .log-step { animation: fadeSlideIn 0.3s ease forwards; }
+
+    /* Pulse for the live indicator */
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.3; }
+    }
+    .pulse-dot { animation: pulse-dot 1.5s ease-in-out infinite; }
+
+    /* Code diff styling */
+    .diff-removed { background-color: rgba(239,68,68,0.15); color: #fca5a5; }
+    .diff-added   { background-color: rgba(34,197,94,0.15);  color: #86efac; }
+  </style>
+</head>
+<body class="bg-gray-950 text-gray-100 min-h-screen font-mono">
+
+  <!-- ─── Header ─────────────────────────────────────────────────────────── -->
+  <header class="border-b border-gray-800 px-6 py-4 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold text-sm">PD</div>
+      <div>
+        <h1 class="text-lg font-bold text-white tracking-tight">PatchDrift</h1>
+        <p class="text-xs text-gray-500">Autonomous API Drift Detection &amp; Self-Healing</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-2 text-xs">
+      <span class="pulse-dot w-2 h-2 rounded-full bg-green-400 inline-block"></span>
+      <span class="text-gray-400">Gateway <span class="text-green-400">localhost:8000</span></span>
+      <span class="text-gray-600 mx-2">|</span>
+      <span class="pulse-dot w-2 h-2 rounded-full bg-blue-400 inline-block"></span>
+      <span class="text-gray-400">Mock API <span class="text-blue-400">localhost:8001</span></span>
+    </div>
+  </header>
+
+  <!-- ─── Main Grid ────────────────────────────────────────────────────────── -->
+  <main class="p-4 grid grid-cols-1 lg:grid-cols-2 gap-4 max-w-7xl mx-auto">
+
+    <!-- ── Panel 1: Send Request ─────────────────────────────────────────── -->
+    <div class="bg-gray-900 border border-gray-800 rounded-xl p-5 flex flex-col gap-4">
+      <div class="flex items-center justify-between">
+        <h2 class="text-sm font-semibold text-gray-300 uppercase tracking-widest">Send Request</h2>
+        <span id="status-badge" class="hidden text-xs px-3 py-1 rounded-full font-semibold"></span>
+      </div>
+
+      <!-- Form -->
+      <div class="flex flex-col gap-3">
+        <div>
+          <label class="text-xs text-gray-500 mb-1 block">Customer ID</label>
+          <input id="customer-id" type="number" value="101"
+            class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" />
+        </div>
+        <div>
+          <label class="text-xs text-gray-500 mb-1 block">Billing Address</label>
+          <input id="billing-address" type="text" value="Hyderabad"
+            class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" />
+        </div>
+
+        <!-- Format toggle -->
+        <div>
+          <label class="text-xs text-gray-500 mb-1 block">Request Format</label>
+          <div class="flex gap-2">
+            <button id="btn-v1" onclick="setFormat('v1')"
+              class="flex-1 py-2 rounded-lg text-xs font-semibold border transition-all bg-indigo-600 border-indigo-500 text-white">
+              V1 Format (Old)
+            </button>
+            <button id="btn-v2" onclick="setFormat('v2')"
+              class="flex-1 py-2 rounded-lg text-xs font-semibold border transition-all bg-gray-800 border-gray-600 text-gray-400">
+              V2 Format (New)
+            </button>
+          </div>
+        </div>
+
+        <!-- Payload preview -->
+        <div>
+          <label class="text-xs text-gray-500 mb-1 block">Payload Preview</label>
+          <pre id="payload-preview"
+            class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs text-indigo-300 overflow-x-auto whitespace-pre-wrap"></pre>
+        </div>
+
+        <button id="send-btn" onclick="sendRequest()"
+          class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 rounded-lg text-sm font-semibold text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+          Send Request
+        </button>
+      </div>
+
+      <!-- Result box -->
+      <div id="result-box" class="hidden">
+        <label class="text-xs text-gray-500 mb-1 block">Response</label>
+        <pre id="result-json"
+          class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs text-green-300 overflow-x-auto whitespace-pre-wrap max-h-40 log-scroll overflow-y-auto"></pre>
+      </div>
+    </div>
+
+    <!-- ── Panel 2: Drift Detection Log ──────────────────────────────────── -->
+    <div class="bg-gray-900 border border-gray-800 rounded-xl p-5 flex flex-col gap-3">
+      <div class="flex items-center justify-between">
+        <h2 class="text-sm font-semibold text-gray-300 uppercase tracking-widest">Drift Detection Log</h2>
+        <button onclick="clearLog()" class="text-xs text-gray-600 hover:text-gray-400 transition-all">Clear</button>
+      </div>
+
+      <div id="drift-log"
+        class="flex-1 min-h-64 max-h-96 overflow-y-auto log-scroll flex flex-col gap-1 bg-gray-950 rounded-lg p-3 border border-gray-800">
+        <p class="text-xs text-gray-600 italic">Send a request to see the drift detection pipeline...</p>
+      </div>
+    </div>
+
+    <!-- ── Panel 3: Hindsight Memory ─────────────────────────────────────── -->
+    <div class="bg-gray-900 border border-gray-800 rounded-xl p-5 flex flex-col gap-3">
+      <div class="flex items-center justify-between">
+        <h2 class="text-sm font-semibold text-gray-300 uppercase tracking-widest">Hindsight Memory</h2>
+        <button onclick="loadHindsight()"
+          class="text-xs bg-gray-800 hover:bg-gray-700 border border-gray-700 px-3 py-1 rounded-lg text-gray-300 transition-all">
+          ↻ Refresh
+        </button>
+      </div>
+
+      <div id="hindsight-panel"
+        class="flex-1 min-h-64 max-h-96 overflow-y-auto log-scroll flex flex-col gap-2 bg-gray-950 rounded-lg p-3 border border-gray-800">
+        <p class="text-xs text-gray-600 italic">No migrations stored yet. Send a request first.</p>
+      </div>
+    </div>
+
+    <!-- ── Panel 4: Generated PR Diff ────────────────────────────────────── -->
+    <div class="bg-gray-900 border border-gray-800 rounded-xl p-5 flex flex-col gap-3">
+      <div class="flex items-center justify-between">
+        <h2 class="text-sm font-semibold text-gray-300 uppercase tracking-widest">Generated PR Diff</h2>
+        <button onclick="generatePR()"
+          class="text-xs bg-indigo-700 hover:bg-indigo-600 border border-indigo-600 px-3 py-1 rounded-lg text-white font-semibold transition-all">
+          Generate PR
+        </button>
+      </div>
+
+      <div id="pr-panel"
+        class="flex-1 min-h-64 max-h-96 overflow-y-auto log-scroll bg-gray-950 rounded-lg p-3 border border-gray-800">
+        <p class="text-xs text-gray-600 italic">Click "Generate PR" to see the permanent code fix...</p>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ─── JavaScript ───────────────────────────────────────────────────────── -->
+  <script>
+    const BASE_URL = "http://localhost:8000";
+    let selectedFormat = "v1";
+
+    // ── Format toggle ──────────────────────────────────────────────────────
+    function setFormat(fmt) {
+      selectedFormat = fmt;
+      const btnV1 = document.getElementById("btn-v1");
+      const btnV2 = document.getElementById("btn-v2");
+      if (fmt === "v1") {
+        btnV1.className = "flex-1 py-2 rounded-lg text-xs font-semibold border transition-all bg-indigo-600 border-indigo-500 text-white";
+        btnV2.className = "flex-1 py-2 rounded-lg text-xs font-semibold border transition-all bg-gray-800 border-gray-600 text-gray-400";
+      } else {
+        btnV2.className = "flex-1 py-2 rounded-lg text-xs font-semibold border transition-all bg-indigo-600 border-indigo-500 text-white";
+        btnV1.className = "flex-1 py-2 rounded-lg text-xs font-semibold border transition-all bg-gray-800 border-gray-600 text-gray-400";
+      }
+      updatePayloadPreview();
+    }
+
+    function updatePayloadPreview() {
+      const customerId = document.getElementById("customer-id").value || "101";
+      const address = document.getElementById("billing-address").value || "Hyderabad";
+      let payload;
+      if (selectedFormat === "v1") {
+        payload = { customer_id: parseInt(customerId), billing_address: address };
+      } else {
+        payload = { customer_id: parseInt(customerId), customer: { address: { billing: address } } };
+      }
+      document.getElementById("payload-preview").textContent = JSON.stringify(payload, null, 2);
+    }
+
+    // Update preview on input change
+    document.addEventListener("DOMContentLoaded", () => {
+      updatePayloadPreview();
+      document.getElementById("customer-id").addEventListener("input", updatePayloadPreview);
+      document.getElementById("billing-address").addEventListener("input", updatePayloadPreview);
+    });
+
+    // ── Status badge ───────────────────────────────────────────────────────
+    const BADGE_STYLES = {
+      healed:             "bg-green-900 text-green-300 border border-green-700",
+      direct_success:     "bg-blue-900 text-blue-300 border border-blue-700",
+      needs_human_review: "bg-yellow-900 text-yellow-300 border border-yellow-700",
+      error:              "bg-red-900 text-red-300 border border-red-700",
+      loading:            "bg-gray-800 text-gray-400 border border-gray-600",
+    };
+
+    const BADGE_LABELS = {
+      healed:             "✓ Healed",
+      direct_success:     "✓ Success",
+      needs_human_review: "⚠ Human Review",
+      error:              "✗ Error",
+      loading:            "⏳ Processing...",
+    };
+
+    function showBadge(status) {
+      const badge = document.getElementById("status-badge");
+      badge.className = `text-xs px-3 py-1 rounded-full font-semibold ${BADGE_STYLES[status] || BADGE_STYLES.error}`;
+      badge.textContent = BADGE_LABELS[status] || status;
+      badge.classList.remove("hidden");
+    }
+
+    // ── Drift log helpers ──────────────────────────────────────────────────
+    function clearLog() {
+      const log = document.getElementById("drift-log");
+      log.innerHTML = '<p class="text-xs text-gray-600 italic">Log cleared.</p>';
+    }
+
+    function appendLog(icon, message, colorClass = "text-gray-300", delay = 0) {
+      return new Promise(resolve => {
+        setTimeout(() => {
+          const log = document.getElementById("drift-log");
+          // Remove placeholder
+          const placeholder = log.querySelector("p.italic");
+          if (placeholder) placeholder.remove();
+
+          const step = document.createElement("div");
+          step.className = `log-step flex items-start gap-2 text-xs py-1 border-b border-gray-800`;
+          step.innerHTML = `
+            <span class="mt-0.5 shrink-0">${icon}</span>
+            <span class="${colorClass}">${message}</span>
+          `;
+          log.appendChild(step);
+          log.scrollTop = log.scrollHeight;
+          resolve();
+        }, delay);
+      });
+    }
+
+    async function runDriftAnimation(data) {
+      clearLog();
+      const base = 0;
+      const step = 350;
+
+      await appendLog("🚀", "Forwarding request to Payment API V2...", "text-gray-400", base);
+
+      if (data.status === "direct_success") {
+        await appendLog("✅", "API V2 responded 200 OK — no drift detected.", "text-green-400", step);
+        await appendLog("📦", `Transaction: ${data.api_response?.transaction_id || "—"}`, "text-blue-300", step * 2);
+        return;
+      }
+
+      if (data.status === "error" && !data.original_error) {
+        await appendLog("❌", data.message || "Request failed.", "text-red-400", step);
+        return;
+      }
+
+      // Drift detected path
+      await appendLog("⚠️",  `API returned error: ${data.original_error || "Unknown error"}`, "text-red-400", step);
+      await appendLog("🔍", "Analyzing error signal for drift indicators...", "text-yellow-400", step * 2);
+      await appendLog("💡", "Drift confirmed — field contract has changed.", "text-yellow-300", step * 3);
+
+      if (data.source === "hindsight") {
+        await appendLog("🧠", "Hindsight recall — matching migration found in memory!", "text-purple-300", step * 4);
+        await appendLog("⚡", "Reusing verified adapter (no re-investigation needed)", "text-purple-400", step * 5);
+      } else {
+        await appendLog("🗂️",  "No prior memory found — generating new adapter...", "text-blue-400", step * 4);
+        await appendLog("🔧", `Adapter: ${JSON.stringify(data.adapter_applied || {})}`, "text-indigo-300", step * 5);
+      }
+
+      await appendLog("🧪", "Running sandbox verification against mock V2...", "text-cyan-400", step * 6);
+      await appendLog(
+        data.verification === "PASS" ? "✅" : "❌",
+        `Sandbox verification: ${data.verification}`,
+        data.verification === "PASS" ? "text-green-400" : "text-red-400",
+        step * 7
+      );
+
+      if (data.verification === "PASS") {
+        await appendLog("🔁", "Retrying original request with adapted payload...", "text-gray-400", step * 8);
+        await appendLog("✅", `Healed! API responded 200 OK — Transaction: ${data.api_response?.transaction_id || "—"}`, "text-green-400", step * 9);
+        await appendLog("💾", `Hindsight: migration ${data.hindsight}`, "text-purple-300", step * 10);
+      } else {
+        await appendLog("👤", "Verification failed — escalating to human review.", "text-yellow-400", step * 8);
+      }
+    }
+
+    // ── Send Request ───────────────────────────────────────────────────────
+    async function sendRequest() {
+      const btn = document.getElementById("send-btn");
+      const resultBox = document.getElementById("result-box");
+      const resultJson = document.getElementById("result-json");
+
+      const customerId = parseInt(document.getElementById("customer-id").value) || 101;
+      const address = document.getElementById("billing-address").value || "Hyderabad";
+
+      let payload;
+      if (selectedFormat === "v1") {
+        payload = { customer_id: customerId, billing_address: address };
+      } else {
+        payload = { customer_id: customerId, customer: { address: { billing: address } } };
+      }
+
+      btn.disabled = true;
+      showBadge("loading");
+      clearLog();
+      appendLog("⏳", "Sending request...", "text-gray-500");
+
+      try {
+        const res = await fetch(`${BASE_URL}/call`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ api: "payment", payload }),
+        });
+
+        const data = await res.json();
+
+        // Show response
+        resultBox.classList.remove("hidden");
+        resultJson.textContent = JSON.stringify(data, null, 2);
+        resultJson.className = `bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs overflow-x-auto whitespace-pre-wrap max-h-40 log-scroll overflow-y-auto ${
+          data.status === "healed" || data.status === "direct_success" ? "text-green-300" : "text-red-300"
+        }`;
+
+        // Badge
+        showBadge(data.status || "error");
+
+        // Animate log
+        await runDriftAnimation(data);
+
+        // Auto-refresh hindsight after healed
+        if (data.status === "healed") {
+          setTimeout(loadHindsight, 3800);
+        }
+
+      } catch (err) {
+        showBadge("error");
+        resultBox.classList.remove("hidden");
+        resultJson.className = "bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs text-red-300 overflow-x-auto whitespace-pre-wrap max-h-40 log-scroll overflow-y-auto";
+        resultJson.textContent = `Error: Backend not reachable.\nMake sure the PatchDrift gateway is running on port 8000.\n\n${err.message}`;
+        clearLog();
+        appendLog("❌", "Backend not reachable. Start the PatchDrift gateway on port 8000.", "text-red-400");
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    // ── Hindsight Memory ───────────────────────────────────────────────────
+    async function loadHindsight() {
+      const panel = document.getElementById("hindsight-panel");
+      panel.innerHTML = '<p class="text-xs text-gray-500 italic">Loading...</p>';
+
+      try {
+        const res = await fetch(`${BASE_URL}/hindsight`);
+        const data = await res.json();
+        const migrations = data.migrations || {};
+        const keys = Object.keys(migrations);
+
+        if (keys.length === 0) {
+          panel.innerHTML = '<p class="text-xs text-gray-600 italic">No migrations stored yet. Send a V1 format request first.</p>';
+          return;
+        }
+
+        panel.innerHTML = "";
+
+        keys.forEach(key => {
+          const entry = migrations[key];
+          const adapter = entry.adapter || {};
+          const uses = entry.uses || 1;
+
+          const card = document.createElement("div");
+          card.className = "bg-gray-900 border border-gray-700 rounded-lg p-3 flex flex-col gap-2";
+          card.innerHTML = `
+            <div class="flex items-center justify-between">
+              <span class="text-xs text-purple-300 font-semibold truncate">${key}</span>
+              <span class="text-xs bg-purple-900 text-purple-300 border border-purple-700 px-2 py-0.5 rounded-full shrink-0 ml-2">
+                Used ${uses}×
+              </span>
+            </div>
+            <div class="text-xs text-gray-400">
+              ${Object.entries(adapter).map(([from, to]) => `
+                <div class="flex items-center gap-2 mt-1">
+                  <code class="bg-red-900/40 text-red-300 px-1.5 py-0.5 rounded">${from}</code>
+                  <span class="text-gray-600">→</span>
+                  <code class="bg-green-900/40 text-green-300 px-1.5 py-0.5 rounded">${to}</code>
+                </div>
+              `).join("")}
+            </div>
+            <div class="flex items-center gap-2 text-xs mt-1">
+              <span class="w-2 h-2 rounded-full bg-green-400 inline-block"></span>
+              <span class="text-green-400">Verified</span>
+            </div>
+          `;
+          panel.appendChild(card);
+        });
+
+      } catch (err) {
+        panel.innerHTML = `<p class="text-xs text-red-400">Failed to load Hindsight. Backend not reachable.</p>`;
+      }
+    }
+
+    // ── Generate PR ────────────────────────────────────────────────────────
+    async function generatePR() {
+      const panel = document.getElementById("pr-panel");
+      panel.innerHTML = '<p class="text-xs text-gray-500 italic">Generating PR diff...</p>';
+
+      try {
+        const res = await fetch(`${BASE_URL}/generate-pr`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+        });
+        const data = await res.json();
+
+        const beforeLines = (data.before || "").split("\n");
+        const afterLines  = (data.after  || "").split("\n");
+
+        const renderDiff = (lines, type) =>
+          lines.map(l => `<div class="diff-${type} px-2 rounded text-xs leading-5">${type === "removed" ? "- " : "+ "}${escapeHtml(l)}</div>`).join("");
+
+        panel.innerHTML = `
+          <div class="flex flex-col gap-3">
+            <div>
+              <p class="text-xs text-indigo-300 font-semibold mb-1">📋 ${escapeHtml(data.title || "PR Title")}</p>
+              <p class="text-xs text-gray-500">${escapeHtml(data.description || "")}</p>
+            </div>
+            <div class="bg-gray-900 border border-gray-700 rounded-lg overflow-hidden">
+              <div class="bg-gray-800 px-3 py-1.5 text-xs text-gray-400 border-b border-gray-700">
+                📁 payment-request.js
+              </div>
+              <div class="p-2 font-mono text-xs leading-5">
+                ${renderDiff(beforeLines, "removed")}
+                ${renderDiff(afterLines, "added")}
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-green-400 inline-block"></span>
+              <span class="text-xs text-green-400">Ready to open PR on branch: <code class="text-indigo-300">${escapeHtml(data.branch || "")}</code></span>
+            </div>
+          </div>
+        `;
+      } catch (err) {
+        panel.innerHTML = `<p class="text-xs text-red-400">Failed to generate PR. Backend not reachable.</p>`;
+      }
+    }
+
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    // ── Init ───────────────────────────────────────────────────────────────
+    updatePayloadPreview();
+  </script>
+</body>
+</html>
