@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PatchDrift — Intro Slide</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .animate-in { animation: fadeIn 0.8s ease forwards; }
+    .delay-1 { animation-delay: 0.3s; opacity: 0; }
+    .delay-2 { animation-delay: 0.6s; opacity: 0; }
+    .delay-3 { animation-delay: 0.9s; opacity: 0; }
+  </style>
+</head>
+<body class="bg-gray-950 text-gray-100 min-h-screen flex items-center justify-center font-mono">
+  
+  <div class="max-w-4xl px-8 text-center">
+    
+    <!-- Logo -->
+    <div class="animate-in flex items-center justify-center gap-3 mb-8">
+      <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-2xl shadow-indigo-500/50">
+        <span class="text-white font-black text-2xl">PD</span>
+      </div>
+      <h1 class="text-5xl font-black tracking-tight text-white">PatchDrift</h1>
+    </div>
+
+    <!-- Tagline -->
+    <p class="animate-in delay-1 text-xl text-indigo-300 font-semibold mb-12">
+      Autonomous API Drift Detection, Self-Healing &amp; Permanent Code Remediation
+    </p>
+
+    <!-- Core message -->
+    <div class="animate-in delay-2 bg-gray-900 border border-gray-800 rounded-2xl p-8 mb-8">
+      <p class="text-2xl text-gray-200 leading-relaxed mb-6">
+        APIs break. <span class="text-red-400">Apps crash.</span><br/>
+        <span class="text-indigo-400 font-bold">PatchDrift fixes it automatically.</span>
+      </p>
+      <div class="flex items-center justify-center gap-3 text-sm text-gray-400">
+        <span class="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
+        <span>Detect the drift</span>
+        <span class="text-gray-700">→</span>
+        <span class="w-2 h-2 rounded-full bg-blue-400 animate-pulse"></span>
+        <span>Heal the request</span>
+        <span class="text-gray-700">→</span>
+        <span class="w-2 h-2 rounded-full bg-purple-400 animate-pulse"></span>
+        <span>Remember the fix</span>
+      </div>
+    </div>
+
+    <!-- Features -->
+    <div class="animate-in delay-3 grid grid-cols-3 gap-4 text-sm">
+      <div class="bg-gray-900 border border-gray-800 rounded-xl p-4">
+        <div class="text-2xl mb-2">🔍</div>
+        <div class="text-gray-300 font-semibold">Auto-Detect</div>
+        <div class="text-gray-500 text-xs mt-1">Breaking changes</div>
+      </div>
+      <div class="bg-gray-900 border border-gray-800 rounded-xl p-4">
+        <div class="text-2xl mb-2">🧠</div>
+        <div class="text-gray-300 font-semibold">Hindsight Memory</div>
+        <div class="text-gray-500 text-xs mt-1">Learn from migrations</div>
+      </div>
+      <div class="bg-gray-900 border border-gray-800 rounded-xl p-4">
+        <div class="text-2xl mb-2">🔧</div>
+        <div class="text-gray-300 font-semibold">Self-Heal</div>
+        <div class="text-gray-500 text-xs mt-1">Zero downtime</div>
+      </div>
+    </div>
+
+  </div>
+
+</body>
+</html>
